@@ -26,6 +26,8 @@ warnings.filterwarnings("ignore")
 plt.rcParams["patch.force_edgecolor"] = True
 plt.style.use('fivethirtyeight')
 mpl.rc('patch', edgecolor = 'dimgray', linewidth=1)
+import plotly.graph_objs as go
+from plotly.offline import plot
 
 #options to display all columns
 pd.options.display.width= None
@@ -51,6 +53,7 @@ print(tab_info)
 
 print(df_initial.head())
 
+# remove nulls and re-display info
 df_initial.dropna(axis = 0, subset=['CustomerID'], inplace=True)
 print('data shape:', df_initial.shape)
 tab_info = pd.DataFrame(df_initial.dtypes).T.rename(index={0: 'column type'})
@@ -58,4 +61,60 @@ tab_info = pd.concat([tab_info, pd.DataFrame(df_initial.isnull().sum()).T.rename
 tab_info = pd.concat([tab_info, pd.DataFrame((df_initial.isnull().sum()/df_initial.shape[0])*100).T.rename(index={0: 'null values(%)'})])
 print(tab_info)
 
+# check for duplicates
+print('duplicate values:', df_initial.duplicated().sum())
+df_initial.drop_duplicates(inplace=True)
 
+# count the number of countries
+# Group the DataFrame by 'CustomerID', 'InvoiceNo', and 'Country' columns,
+# and count the occurrences of each combination
+temp = df_initial[['CustomerID','InvoiceNo','Country']].groupby(['CustomerID', 'InvoiceNo', 'Country']).count()
+temp = temp.reset_index(drop=False)
+countries = temp['Country'].value_counts()
+print('nb of countries in the dataframe:', len(countries))
+
+# choropleth map
+data = dict(
+    type='choropleth',  # Type of plot: choropleth map
+    locations=countries.index,  # Locations (countries) for the map
+    locationmode='country names',  # Location mode: specify that the locations are country names
+    z=countries,  # Values to be visualized (order counts for each country)
+    text=countries.index,  # Text to be displayed when hovering over each country
+    colorbar={'title': 'Order nb.'},  # Colorbar title
+    colorscale=[  # Color scale for the map
+        [0, 'rgb(224,255,255)'],
+        [0.01, 'rgb(166,206,227)'],
+        [0.02, 'rgb(31,120,180)'],
+        [0.03, 'rgb(178,223,138)'],
+        [0.05, 'rgb(51,160,44)'],
+        [0.10, 'rgb(251,154,153)'],
+        [0.20, 'rgb(255,255,0)'],
+        [1, 'rgb(227,26,28)']],
+reversescale=False)
+
+layout = dict(title='Number of order per country',
+geo = dict(showframe=True, projection={'type': 'mercator'}))
+
+choromap = go.Figure(data = [data], layout=layout)
+iplot(choromap, validate=False)
+plot(choromap, filename='choropleth_map.html', auto_open=False)
+
+# unique number of users and products
+counts = pd.DataFrame([{'products': df_initial['StockCode'].nunique(),
+               'transactions': df_initial['InvoiceNo'].nunique(),
+               'customers': df_initial['CustomerID'].nunique(),
+               }],columns=['products', 'transactions', 'customers'], index= ['quantity'])
+
+print(counts)
+
+# number of product purchased in every transaction
+
+# Group the DataFrame by 'CustomerID' and 'InvoiceNo' columns,
+# and count the occurrences of 'InvoiceDate' for each group
+temp = df_initial.groupby(['CustomerID','InvoiceNo'], as_index=False)['InvoiceDate'].count()
+
+# Rename the column 'InvoiceDate' to 'Number of Products'
+nb_products_per_basket = temp.rename(columns = {'InvoiceDate': 'Number of Products'})
+
+# Display the first 10 rows of the DataFrame sorted by 'CustomerID'
+print(nb_products_per_basket[:10].sort_values('CustomerID'))
