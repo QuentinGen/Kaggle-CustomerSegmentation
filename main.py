@@ -112,9 +112,93 @@ print(counts)
 # Group the DataFrame by 'CustomerID' and 'InvoiceNo' columns,
 # and count the occurrences of 'InvoiceDate' for each group
 temp = df_initial.groupby(['CustomerID','InvoiceNo'], as_index=False)['InvoiceDate'].count()
-
 # Rename the column 'InvoiceDate' to 'Number of Products'
 nb_products_per_basket = temp.rename(columns = {'InvoiceDate': 'Number of Products'})
-
 # Display the first 10 rows of the DataFrame sorted by 'CustomerID'
 print(nb_products_per_basket[:10].sort_values('CustomerID'))
+
+# Number of transactions corresponding to canceled orders:
+condition = nb_products_per_basket['InvoiceNo'].str.startswith('C')
+nb_products_per_basket['order_canceled'] = condition.astype(int)
+print(nb_products_per_basket[:10].sort_values('CustomerID'))
+
+# Calculate the percentage of canceled orders
+total_orders = nb_products_per_basket.shape[0]
+canceled_order = nb_products_per_basket['order_canceled'].sum()
+percentage_canceled = canceled_order / total_orders * 100
+print(f'Percentage of canceled orders:, {percentage_canceled:.2f}%')
+
+# Check if there is always a corresponding positive order with the same quantity as negative order
+# Filter the DataFrame 'df_initial' to include only the rows where the 'Quantity' column is less than 0,
+# and select specific columns ('CustomerID', 'Quantity', 'StockCode', 'Description', 'UnitPrice').
+df_check = df_initial[(df_initial['Quantity'] < 0) & (df_initial['Description'] != 'Discount')][['CustomerID', 'Quantity', 'StockCode', 'Description', 'UnitPrice']]
+
+# Iterate over each row in the filtered DataFrame 'df_check'.
+for index, col in df_check.iterrows():
+    # Check if there are no rows in 'df_initial' that match the conditions specified.
+    if df_initial[(df_initial['CustomerID'] == col[0]) & (df_initial['Quantity'] == -col[1])
+            & (df_initial['Description'] == col[2])].shape[0] == 0:
+        # If the conditions are not fulfilled, print the corresponding row from 'df_check'.
+        print(df_check.loc[index])
+        # Print a separator and a message indicating the hypothesis is not fulfilled.
+        print(15*'-'+'>'+'HYPOTHESIS NOT FULFILLED')
+        # Exit the loop.
+        break
+
+# Make a deep copy of the initial DataFrame to work with
+df_cleaned = df_initial.copy(deep=True)
+
+# Add a new column 'QuantityCanceled' initialized with zeros
+df_cleaned['QuantityCanceled'] = 0
+
+# Initialize empty lists to store indices of doubtful entries and entries to remove
+entry_to_remove = []
+doubtful_entry = []
+
+# Loop over each row in the initial DataFrame
+for index, col in df_initial.iterrows():
+    # Check conditions for cancelations
+    if (col['Quantity'] > 0) or (col['Description'] == 'Discount'):
+        # Skip rows representing valid transactions (Quantity > 0) or discounts
+        continue
+
+    # Extract subset DataFrame of potential counterpart transactions
+    df_test = df_initial[(df_initial['CustomerID'] == col['CustomerID']) &
+                         (df_initial['StockCode'] == col['StockCode']) &
+                         (df_initial['InvoiceDate'] < col['InvoiceDate']) &
+                         (df_initial['Quantity'] > 0)].copy()
+
+    # Cancelation WITHOUT counterpart
+    if df_test.shape[0] == 0:
+        # Add index of doubtful entry to list
+        doubtful_entry.append(index)
+
+    # Cancelation WITH a counterpart
+    elif df_test.shape[0] == 1:
+        # Get index of the counterpart transaction
+        index_order = df_test.index[0]
+        # Set QuantityCanceled to negative value of Quantity of the original transaction
+        df_cleaned.loc[index_order, 'QuantityCanceled'] = -col['Quantity']
+        # Mark the original transaction for removal
+        entry_to_remove.append(index)
+
+    # Various counterparts exist in orders: we delete the last one
+    elif df_test.shape[0] > 1:
+        # Sort the subset DataFrame by index in descending order (most recent first)
+        df_test.sort_index(axis=0, ascending=False, inplace=True)
+        # Iterate over potential counterpart transactions
+        for ind, val in df_test.iterrows():
+            # Check if the canceled quantity exceeds the available quantity
+            if val['Quantity'] < -col['Quantity']:
+                # If so, move to the next potential counterpart transaction
+                continue
+            # Update df_cleaned to reflect the canceled quantity
+            df_cleaned.loc[ind, 'QuantityCanceled'] = -col['Quantity']
+            # Mark the original transaction for removal
+            entry_to_remove.append(index)
+            # Exit the loop after processing the first valid counterpart transaction
+            break
+
+print('entry to remove:', len(entry_to_remove))
+print('doubtfull entry:', len(doubtful_entry))
+
