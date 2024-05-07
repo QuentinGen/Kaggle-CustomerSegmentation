@@ -199,16 +199,29 @@ for index, col in df_initial.iterrows():
             # Exit the loop after processing the first valid counterpart transaction
             break
 
-print('entry to remove:', len(entry_to_remove))
-print('doubtfull entry:', len(doubtful_entry))
+print('nb of entry to remove:', len(entry_to_remove))
+print('nb of doubtfull entry:', len(doubtful_entry))
 
-# Remove entries marked for removal from df_cleaned
-#df_cleaned.drop(entry_to_remove, axis=0, inplace=True)
-# Remove doubtful entries from df_cleaned
-#df_cleaned.drop(doubtful_entry, axis=0, inplace=True)
-# Select remaining entries with negative quantity (indicating cancellations)
-# and exclude entries with StockCode 'D' (discounts)
+# Drop rows marked for removal from df_cleaned
+df_cleaned.drop(entry_to_remove, axis=0, inplace=True)
+# Drop doubtful entries from df_cleaned
+df_cleaned.drop(doubtful_entry, axis=0, inplace=True)
+# Select remaining entries with negative quantity and excluding discounts
 remaining_entries = df_cleaned[(df_cleaned['Quantity'] < 0) & (df_cleaned['StockCode'] != 'D')]
-# Print the number of deleted entries
-print('Number of deleted entries:', len(remaining_entries))
-remaining_entries.head(5)
+# Print the number of entries to be deleted
+print("Number of entries to delete: {}".format(remaining_entries.shape[0]))
+
+# Print the first 5 entries to be deleted
+print(remaining_entries.head(5))
+# Example of filtering by specific conditions
+print(df_cleaned[(df_cleaned['CustomerID'] == 14048) & (df_cleaned['StockCode'] == '22464')])
+
+# Extract unique StockCodes containing only alphabetic characters
+list_special_codes = df_cleaned[df_cleaned['StockCode'].str.contains('^[a-zA-Z]+', regex=True)]['StockCode'].unique()
+print(list_special_codes)
+
+# Return the description for each of those special codes
+for code in list_special_codes:
+    print(code, df_cleaned[df_cleaned['StockCode']==code]['Description']).unique()
+
+
