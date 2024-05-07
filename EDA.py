@@ -222,6 +222,26 @@ print(list_special_codes)
 
 # Return the description for each of those special codes
 for code in list_special_codes:
-    print(code, df_cleaned[df_cleaned['StockCode']==code]['Description']).unique()
+    print(code, df_cleaned[df_cleaned['StockCode']==code]['Description'].unique())
+
+# TotalPrice to indicates the total price of every purchase
+df_cleaned['TotalPrice'] = (df_cleaned['Quantity'] - df_cleaned['QuantityCanceled']) * df_cleaned['UnitPrice']
+df_cleaned.sort_values('CustomerID')[:5]
+
+# Group all product purchases from an order and calculate total price
+temp = df_cleaned.groupby(by=['CustomerID', 'InvoiceNo'], as_index=False)['TotalPrice'].sum()
+basket_price = temp.rename(columns = {'TotalPrice': 'Basket Price'})
+
+# Order Date
+df_cleaned['InvoiceDate_int'] = df_cleaned['InvoiceDate'].astype('int64')
+temp = df_cleaned.groupby(by=['CustomerID', 'InvoiceNo'], as_index=False)['InvoiceDate_int'].mean()
+df_cleaned.drop('InvoiceDate_int',axis = 1, inplace=True)
+basket_price.loc[:, 'InvoiceDate'] = pd.to_datetime(temp['InvoiceDate_int'])
+
+# Select entries where the basket price is greater than 0
+basket_price = basket_price[basket_price['Basket Price'] > 0]
+print(basket_price.sort_values('CustomerID')[:6])
+
+
 
 
